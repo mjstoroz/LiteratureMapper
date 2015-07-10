@@ -36,7 +36,7 @@ from qgis.gui import *
 class MapToolEmitPoint(QgsMapToolEmitPoint):
     canvasDoubleClicked = pyqtSignal()
     
-    def canvasDoubleClickedEvent:
+    def canvasDoubleClickedEvent():
         self.canvasDoubleClicked.emit()
 
 class LiteratureMapper:
