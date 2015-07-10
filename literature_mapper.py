@@ -34,10 +34,13 @@ import urllib2
 from qgis.gui import *
 
 class MapToolEmitPoint(QgsMapToolEmitPoint):
-    canvasDoubleClicked = pyqtSignal()
+    canvasDoubleClicked = pyqtSignal(list)
     
-    def canvasDoubleClickedEvent():
-        self.canvasDoubleClicked.emit()
+    
+    def canvasDoubleClickedEvent(self, event):
+        point = self.toMapCoordinates(event.pos()) 
+        self.canvasDoubleClicked.emit(point,event.button())
+        super(MapToolEmitPoint, self).canvasDoubleClickEvent(event)
 
 class LiteratureMapper:
     """QGIS Plugin Implementation."""
@@ -55,7 +58,9 @@ class LiteratureMapper:
         # a reference to our map canvas
         self.canvas = self.iface.mapCanvas()  #CHANGE
         # this QGIS tool emits as QgsPoint after each click on the map canvas
-        self.clickTool = QgsMapToolEmitPoint(self.canvas)
+        #self.clickTool = QgsMapToolEmitPoint(self.canvas)
+        self.clickTool = MapToolEmitPoint(self.canvas)
+        self.toolPan = QgsMapToolPan(self.canvas)
         
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
@@ -216,6 +221,8 @@ class LiteratureMapper:
         self.dlgTable.activateWindow()
 
         # TODO: accept other geometry types besides points
+        # deactivate the click tool and switch to Pan
+        #self.canvas.setMapTool(self.toolPan)
 
     def saveZotero(self):
         #Write what happens to save to zotero here
@@ -244,6 +251,8 @@ class LiteratureMapper:
             self.iface.messageBar().pushMessage("Failed to save locations to Zotero", level=3)
 
     def digitizePoint(self):
+        # make our clickTool the tool that we'll use for now
+        self.canvas.setMapTool(self.clickTool)
         QObject.connect(self.clickTool, SIGNAL("canvasClicked(const QgsPoint &, Qt::MouseButton)"), self.handleMouseDown)
         
     def handleMouseDownTwo(self, point):
@@ -257,18 +266,25 @@ class LiteratureMapper:
         QgsMessageLog.logMessage("newPoint: %s" % newPoint, 'LiteratureMapper', QgsMessageLog.INFO)
         QgsMessageLog.logMessage("newPoint: %s" % type(newPoint), 'LiteratureMapper', QgsMessageLog.INFO)
         QgsMessageLog.logMessage("self.pointList: %s" % self.pointList, 'LiteratureMapper', QgsMessageLog.INFO)
-        
-        QObject.connect(self.clickTool, SIGNAL("canvasDoubleClicked(const QgsPoint &, Qt::MouseButton)"), self.handleMouseDownTwoFinish)
+        self.dlgTable.tableWidget_Zotero.setItem(self.dlgTable.tableWidget_Zotero.currentRow(),4,QTableWidgetItem('{"type": "Multipoint", "coordinates": %s}' % self.pointList))
+
+        #QObject.connect(self.doubleClick, SIGNAL("canvasDoubleClicked(const QgsPoint &, Qt::MouseButton)"), self.handleMouseDownTwoFinish)
         #Needs a special implementation of canvasDoubleClicked because it is a virtual method and needs to be told what to do.  http://stackoverflow.com/questions/19973188/emit-and-catch-double-click-signals-from-qgsmapcanvas
         
 
     def handleMouseDownTwoFinish(self):
+        QgsMessageLog.logMessage("Double Click End", 'LiteratureMapper', QgsMessageLog.INFO)
+        QgsMessageLog.logMessage("self.pointList: %s" % self.pointList, 'LiteratureMapper', QgsMessageLog.INFO)
         self.dlgTable.tableWidget_Zotero.setItem(self.dlgTable.tableWidget_Zotero.currentRow(),4,QTableWidgetItem('{"type": "Multipoint", "coordinates": %s}' % self.pointList))
         # TODO: Fix double click signal
         # TODO: put the multipoints into a memory shp
         # TODO: populate the multipoint memory shp with existing multipoints
     
+    
     def digitizeMultipoint(self):
+        # make our clickTool the tool that we'll use for now
+        self.canvas.setMapTool(self.clickTool)
+        
         #Empty list for storing points for digitizing
         self.pointList = []
         QgsMessageLog.logMessage("self.pointList: %s" % self.pointList, 'LiteratureMapper', QgsMessageLog.INFO)
@@ -276,6 +292,9 @@ class LiteratureMapper:
         #resultMultipoint = QObject.connect(self.clickTool, SIGNAL("canvasClicked(const QgsPoint)"), self.handleMouseDownTwo)
         QObject.connect(self.clickTool, SIGNAL("canvasClicked(const QgsPoint &, Qt::MouseButton)"), self.handleMouseDownTwo)
         #QObject.connect(self.clickTool, SIGNAL("canvasDoubleClicked()"), self.handleMouseDownTwoFinish)
+        #self.canvas.setMapTool(self.mapTool)
+        #self.mapTool.canvasDoubleClicked.connect(self.handleMouseDownTwoFinish)
+        QObject.connect(self.clickTool, SIGNAL("canvasDoubleClicked(const QgsPoint &, Qt::MouseButton)"), self.handleMouseDownTwoFinish)
 
 
     def unload(self):
@@ -302,8 +321,6 @@ class LiteratureMapper:
 
     def run(self):
         """Run method that performs all the real work"""
-        # make our clickTool the tool that we'll use for now
-        self.canvas.setMapTool(self.clickTool)
         
         # show the dialog
         self.dlg.show()
